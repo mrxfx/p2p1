@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>P2P Voice Call (Timer Fixed)</title>
+  <title>P2P Voice Call (Auto Cut)</title>
   <style>
     body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
     input, button { margin: 6px; padding: 10px; font-size: 16px; border-radius: 8px; border: none; }
@@ -12,20 +12,21 @@
   </style>
 </head>
 <body>
-  <h2>🔊 P2P Voice Call</h2>
+  <h2>🔊 P2P Voice Call (Auto Cut)</h2>
   <input id="myCustomId" placeholder="Your Custom ID"><br>
   <button onclick="registerPeer()">🔗 Register</button><br>
   <input id="otherId" placeholder="Call to ID"><br>
   <button onclick="startCall()">📞 Call</button>
+  <button onclick="answerCall()">✅ Answer</button>
   <button onclick="endCall()">❌ End</button>
-  <button onclick="toggleMic()">🎙️ Mic</button>
   <div id="callInfo">No call yet</div>
   <div id="timer">00:00</div>
   <audio id="remoteAudio" autoplay></audio>
 
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.3.2/dist/peerjs.min.js"></script>
   <script>
-    let peer, currentCall = null, incomingCall = null, localStream = null, timerInterval, callStartTime;
+    let peer, currentCall = null, incomingCall = null, localStream = null;
+    let timerInterval, callStartTime, missedTimeout;
 
     function registerPeer() {
       const id = document.getElementById("myCustomId").value.trim();
@@ -46,6 +47,16 @@
         incomingCall = incoming;
         document.getElementById("callInfo").innerText = "📥 Incoming: " + incoming.peer;
         if (window.Android) Android.onIncomingCall(incoming.peer);
+
+        // 🔴 Auto-cut after 30s if not answered
+        missedTimeout = setTimeout(() => {
+          if (!currentCall && incomingCall === incoming) {
+            document.getElementById("callInfo").innerText = "❌ He/She did not receive the call";
+            incoming.close();
+            incomingCall = null;
+            if (window.Android) Android.onMissedCall(incoming.peer);
+          }
+        }, 30000);
       });
     }
 
@@ -57,9 +68,10 @@
         currentCall = incomingCall;
         incomingCall.on("stream", remoteStream => {
           playStream(remoteStream);
-          showCallInfo(incomingCall.peer); // ✅ Timer starts here
+          showCallInfo(incomingCall.peer);
         });
         incomingCall = null;
+        clearTimeout(missedTimeout);
       });
     }
 
@@ -71,8 +83,10 @@
         currentCall = peer.call(id, stream);
         currentCall.on("stream", remoteStream => {
           playStream(remoteStream);
-          showCallInfo(id); // ✅ Timer starts here
+          showCallInfo(id);
         });
+
+        // Optional missed timeout for caller if needed
       });
     }
 
@@ -82,14 +96,7 @@
       stopTimer();
       document.getElementById("callInfo").innerText = "❌ Call Ended";
       if (window.Android && Android.onCallEnded) Android.onCallEnded();
-    }
-
-    function toggleMic() {
-      if (localStream) {
-        const mic = localStream.getAudioTracks()[0];
-        mic.enabled = !mic.enabled;
-        if (window.Android) Android.onMicToggled(mic.enabled);
-      }
+      clearTimeout(missedTimeout);
     }
 
     function playStream(stream) {
@@ -100,7 +107,7 @@
 
     function showCallInfo(peerId) {
       document.getElementById("callInfo").innerText = "✅ Connected to: " + peerId;
-      startTimer(); // ✅ Timer starts now
+      startTimer();
       if (window.Android) Android.onCallConnected(peerId);
     }
 
