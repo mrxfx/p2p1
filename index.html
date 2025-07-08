@@ -42,6 +42,16 @@
       });
 
       peer.on("call", incoming => {
+  // ✅ Notify the Sketchware app about the incoming call
+  if (window.Android) Android.onIncomingCall(incoming.peer);
+
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    incoming.answer(stream);
+    currentCall = incoming;
+    incoming.on("stream", playStream);
+    showCallInfo(incoming.peer);
+  });
+});
         document.getElementById("callInfo").innerText = "📥 Incoming: " + incoming.peer;
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
           localStream = stream;
