@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>P2P Voice Call (Auto Cut)</title>
+  <title>P2P Call - Caller Side Timeout</title>
   <style>
     body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
     input, button { margin: 6px; padding: 10px; font-size: 16px; border-radius: 8px; border: none; }
@@ -12,7 +12,7 @@
   </style>
 </head>
 <body>
-  <h2>🔊 P2P Voice Call (Auto Cut)</h2>
+  <h2>📞 P2P Voice Call</h2>
   <input id="myCustomId" placeholder="Your Custom ID"><br>
   <button onclick="registerPeer()">🔗 Register</button><br>
   <input id="otherId" placeholder="Call to ID"><br>
@@ -26,7 +26,7 @@
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.3.2/dist/peerjs.min.js"></script>
   <script>
     let peer, currentCall = null, incomingCall = null, localStream = null;
-    let timerInterval, callStartTime, missedTimeout;
+    let timerInterval, callStartTime;
 
     function registerPeer() {
       const id = document.getElementById("myCustomId").value.trim();
@@ -48,15 +48,7 @@
         document.getElementById("callInfo").innerText = "📥 Incoming: " + incoming.peer;
         if (window.Android) Android.onIncomingCall(incoming.peer);
 
-        // 🔴 Auto-cut after 30s if not answered
-        missedTimeout = setTimeout(() => {
-          if (!currentCall && incomingCall === incoming) {
-            document.getElementById("callInfo").innerText = "❌ He/She did not receive the call";
-            incoming.close();
-            incomingCall = null;
-            if (window.Android) Android.onMissedCall(incoming.peer);
-          }
-        }, 10000);
+        // No auto message shown on receiver here. Receiver handles timeout in app.
       });
     }
 
@@ -71,22 +63,33 @@
           showCallInfo(incomingCall.peer);
         });
         incomingCall = null;
-        clearTimeout(missedTimeout);
       });
     }
 
     function startCall() {
       const id = document.getElementById("otherId").value.trim();
       if (!id) return alert("Enter ID to call");
+
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         localStream = stream;
         currentCall = peer.call(id, stream);
+
+        let answered = false;
+
         currentCall.on("stream", remoteStream => {
+          answered = true;
           playStream(remoteStream);
           showCallInfo(id);
         });
 
-        // Optional missed timeout for caller if needed
+        // ✅ Only the caller sees timeout message if unanswered
+        setTimeout(() => {
+          if (!answered) {
+            document.getElementById("callInfo").innerText = "❌ " + id + " did not receive the call";
+            if (window.Android) Android.onMissedCall(id);
+            currentCall.close();
+          }
+        }, 30000);
       });
     }
 
@@ -96,7 +99,6 @@
       stopTimer();
       document.getElementById("callInfo").innerText = "❌ Call Ended";
       if (window.Android && Android.onCallEnded) Android.onCallEnded();
-      clearTimeout(missedTimeout);
     }
 
     function playStream(stream) {
