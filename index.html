@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>P2P Voice Call</title>
+  <title>P2P Voice Call (Timer Fixed)</title>
   <style>
     body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
     input, button { margin: 6px; padding: 10px; font-size: 16px; border-radius: 8px; border: none; }
@@ -55,8 +55,10 @@
         localStream = stream;
         incomingCall.answer(stream);
         currentCall = incomingCall;
-        incomingCall.on("stream", playStream);
-        showCallInfo(incomingCall.peer);
+        incomingCall.on("stream", remoteStream => {
+          playStream(remoteStream);
+          showCallInfo(incomingCall.peer); // ✅ Timer starts here
+        });
         incomingCall = null;
       });
     }
@@ -67,8 +69,10 @@
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         localStream = stream;
         currentCall = peer.call(id, stream);
-        currentCall.on("stream", playStream);
-        showCallInfo(id);
+        currentCall.on("stream", remoteStream => {
+          playStream(remoteStream);
+          showCallInfo(id); // ✅ Timer starts here
+        });
       });
     }
 
@@ -96,7 +100,7 @@
 
     function showCallInfo(peerId) {
       document.getElementById("callInfo").innerText = "✅ Connected to: " + peerId;
-      startTimer();
+      startTimer(); // ✅ Timer starts now
       if (window.Android) Android.onCallConnected(peerId);
     }
 
