@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>P2P Call - Caller Side Timeout</title>
+  <meta charset="UTF-8">
+  <title>P2P Firebase Caller with Name Mapping</title>
   <style>
     body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
     input, button { margin: 6px; padding: 10px; font-size: 16px; border-radius: 8px; border: none; }
@@ -12,7 +12,7 @@
   </style>
 </head>
 <body>
-  <h2>📞 P2P Voice Call</h2>
+  <h2>📞 P2P Firebase Call</h2>
   <input id="myCustomId" placeholder="Your Custom ID"><br>
   <button onclick="registerPeer()">🔗 Register</button><br>
   <input id="otherId" placeholder="Call to ID"><br>
@@ -24,9 +24,23 @@
   <audio id="remoteAudio" autoplay></audio>
 
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.3.2/dist/peerjs.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script>
+    const firebaseConfig = {
+      databaseURL: "https://p2pxcall-default-rtdb.firebaseio.com/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
     let peer, currentCall = null, incomingCall = null, localStream = null;
     let timerInterval, callStartTime;
+
+    function getName(id, callback) {
+      db.ref("names/" + id).once("value").then(snap => {
+        callback(snap.exists() ? snap.val() : id);
+      });
+    }
 
     function registerPeer() {
       const id = document.getElementById("myCustomId").value.trim();
@@ -45,10 +59,10 @@
 
       peer.on("call", incoming => {
         incomingCall = incoming;
-        document.getElementById("callInfo").innerText = "📥 Incoming: " + incoming.peer;
+        getName(incoming.peer, name => {
+          document.getElementById("callInfo").innerText = "📥 Incoming: " + name;
+        });
         if (window.Android) Android.onIncomingCall(incoming.peer);
-
-        // No auto message shown on receiver here. Receiver handles timeout in app.
       });
     }
 
@@ -68,6 +82,7 @@
 
     function startCall() {
       const id = document.getElementById("otherId").value.trim();
+      const myId = document.getElementById("myCustomId").value.trim();
       if (!id) return alert("Enter ID to call");
 
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
@@ -82,14 +97,16 @@
           showCallInfo(id);
         });
 
-        // ✅ Only the caller sees timeout message if unanswered
         setTimeout(() => {
           if (!answered) {
-            document.getElementById("callInfo").innerText = "❌ " + id + " did not receive the call";
-            if (window.Android) Android.onMissedCall(id);
-            currentCall.close();
+            getName(id, name => {
+              document.getElementById("callInfo").innerText = "❌ " + name + " did not receive the call";
+              if (window.Android) Android.onMissedCall(name);
+              logCall(myId, id, "missed", "00:00");
+              currentCall.close();
+            });
           }
-        }, 30000);
+        }, 10000);
       });
     }
 
@@ -108,12 +125,15 @@
     }
 
     function showCallInfo(peerId) {
-      document.getElementById("callInfo").innerText = "✅ Connected to: " + peerId;
-      startTimer();
+      getName(peerId, name => {
+        document.getElementById("callInfo").innerText = "✅ Connected to: " + name;
+      });
+      startTimer(peerId);
       if (window.Android) Android.onCallConnected(peerId);
     }
 
-    function startTimer() {
+    function startTimer(peerId) {
+      const myId = document.getElementById("myCustomId").value.trim();
       callStartTime = Date.now();
       timerInterval = setInterval(() => {
         const sec = Math.floor((Date.now() - callStartTime) / 1000);
@@ -122,12 +142,18 @@
         const time = `${m}:${s}`;
         document.getElementById("timer").innerText = time;
         if (window.Android) Android.onCallDuration(time);
+        logCall(myId, peerId, "connected", time);
       }, 1000);
     }
 
     function stopTimer() {
       clearInterval(timerInterval);
       document.getElementById("timer").innerText = "00:00";
+    }
+
+    function logCall(from, to, status, duration) {
+      const log = { from, to, status, duration, timestamp: Date.now() };
+      db.ref("callLogs").push(log);
     }
   </script>
 </body>
