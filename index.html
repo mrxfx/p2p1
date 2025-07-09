@@ -121,7 +121,13 @@
     function playStream(stream) {
       const audio = document.getElementById("remoteAudio");
       audio.srcObject = stream;
-      audio.play();
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(err => {
+          console.warn("Autoplay blocked", err);
+          if (window.Android) Android.onError("Autoplay blocked");
+        });
+      }
     }
 
     function showCallInfo(peerId) {
